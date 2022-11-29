@@ -1,12 +1,13 @@
 #!/usr/bin/env python
-import argparse
-from datetime import datetime
+"""
+Used to manage and pull stats from a Motorola MB8600 modem (and possibly others).
+"""
 import hashlib
-import json
 import hmac
+import json
 import time
+from datetime import datetime
 
-from bs4 import BeautifulSoup
 import requests
 
 HNAP_URI = "http://192.168.100.1/HNAP1/"
@@ -28,20 +29,32 @@ session = requests.Session()
 
 
 def millis():
+    """
+    Return the current time in milliseconds.
+    """
     return int(round(time.time() * 1000)) % 2000000000000
 
 
 def md5sum(key, data):
+    """
+    Return the MD5 hash of the given data, using the given key.
+    """
     h = hmac.new(key.encode("utf-8"), digestmod=hashlib.md5)
     h.update(data.encode("utf-8"))
     return h.hexdigest()
 
 
 def hnap_auth(key, data):
+    """
+    Return the HNAP_AUTH header value for the given data, using the given key.
+    """
     return md5sum(key, data).upper() + " " + str(millis())
 
 
 def do_action(action, params):
+    """
+    Perform an HNAP action with the given parameters.
+    """
     action_uri = f'"{SOAP_NAMESPACE}{action}"'
     private_key = session.cookies.get("PrivateKey", path="/", default="withoutloginkey")
 
@@ -66,10 +79,16 @@ def do_action(action, params):
 
 
 def do_actions(*actions):
+    """
+    Perform multiple HNAP actions at once.
+    """
     return do_action("GetMultipleHNAPs", {action: "" for action in actions})
 
 
 def login(username, password):
+    """
+    Login to the modem.
+    """
     response = do_action(
         "Login",
         {
@@ -103,6 +122,9 @@ def login(username, password):
 
 
 def main():
+    """
+    Log in to the modem and pull all the known statistics.
+    """
     login("admin", "motorola")
 
     results = do_actions(*KNOWN_ACTIONS)
