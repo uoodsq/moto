@@ -16,8 +16,11 @@ from typing import Generator
 import requests
 import urllib3
 from dateutil.parser import parse as parse_datetime
+from influxdb_client import InfluxDBClient, Point
+from influxdb_client.client.write_api import SYNCHRONOUS
 from rich.console import Console
 from rich.logging import RichHandler
+from rich.progress import Progress
 from rich.table import Table
 
 FORMAT = "%(message)s"
@@ -408,6 +411,109 @@ def dump_command():
     print(json.dumps({"ts": datetime.now().isoformat(), "data": results}))
 
 
+def ingest_command():
+    """
+    Ingest modem data to InfluxDB.
+    """
+    token = os.environ["INFLUXDB_TOKEN"]
+    org = os.environ["INFLUXDB_ORG"]
+    bucket = os.environ["INFLUXDB_BUCKET"]
+    url = os.environ["INFLUXDB_URL"]
+
+    client = InfluxDBClient(url=url, token=token, org=org)
+    write_api = client.write_api(write_options=SYNCHRONOUS)
+    now = datetime.now()
+
+    with Progress() as progress:
+        task = progress.add_task("Logging in...", total=None)
+
+        login(MODEM_USERNAME, MODEM_PASSWORD)
+
+        progress.update(task, completed=True)
+
+        task = progress.add_task("Downloading...", total=None)
+
+        results = do_actions(*KNOWN_ACTIONS)
+
+        progress.update(task, completed=True)
+
+        logs = list(
+            parse_logs(results["GetMotoStatusLogResponse"]["MotoStatusLogList"])
+        )
+
+        task = progress.add_task("Uploading logs...", total=len(logs))
+
+        for log in logs:
+            point = (
+                Point("log")
+                .time(log.timestamp)
+                .tag("level", log.level)
+                .field("message", log.message)
+            )
+
+            write_api.write(bucket, org, point)
+
+            progress.update(task, advance=1)
+
+        channels = list(
+            parse_downstream_channels(
+                results["GetMotoStatusDownstreamChannelInfoResponse"][
+                    "MotoConnDownstreamChannel"
+                ]
+            )
+        )
+
+        task = progress.add_task(
+            "Uploading downstream channels...", total=len(channels)
+        )
+
+        for channel in channels:
+            point = (
+                Point("downstream")
+                .time(now)
+                .tag("channel", str(channel.channel))
+                .tag("channel_id", str(channel.channel_id))
+                .tag("lock_status", channel.lock_status)
+                .tag("modulation", channel.modulation)
+                .field("frequency", channel.frequency)
+                .field("power", channel.power)
+                .field("snr", channel.snr)
+                .field("corrected", channel.corrected)
+                .field("uncorrected", channel.uncorrected)
+            )
+
+            write_api.write(bucket, org, point)
+
+            progress.update(task, advance=1)
+
+        channels = list(
+            parse_upstream_channels(
+                results["GetMotoStatusUpstreamChannelInfoResponse"][
+                    "MotoConnUpstreamChannel"
+                ]
+            )
+        )
+
+        task = progress.add_task("Uploading upstream channels...", total=len(channels))
+
+        for channel in channels:
+            point = (
+                Point("upstream")
+                .time(now)
+                .tag("channel", str(channel.channel))
+                .tag("channel_id", str(channel.channel_id))
+                .tag("lock_status", channel.lock_status)
+                .tag("channel_type", channel.channel_type)
+                .field("symbol_rate", channel.symbol_rate)
+                .field("frequency", channel.frequency)
+                .field("power", channel.power)
+            )
+
+            write_api.write(bucket, org, point)
+
+            progress.update(task, advance=1)
+
+
 if __name__ == "__main__":
     from argparse import ArgumentParser
 
@@ -423,6 +529,9 @@ if __name__ == "__main__":
 
     subparser = subparsers.add_parser("levels")
     subparser.set_defaults(fn=levels_command)
+
+    subparser = subparsers.add_parser("ingest")
+    subparser.set_defaults(fn=ingest_command)
 
     args = parser.parse_args()
 
