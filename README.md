@@ -15,3 +15,7 @@ python -m venv venv
 source venv/bin/activate  # or whatever
 pip install -r requirements.txt
 ```
+
+# Notes
+
+Recently, my modem has started redirecting from unencrypted HTTP to HTTPS secured with a self-signed cert.  Because of this, I disabled certificate verification in the Python script that pulls stats and logs from the modem.  Use this at your own risk!

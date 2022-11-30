@@ -5,12 +5,17 @@ Used to manage and pull stats from a Motorola MB8600 modem (and possibly others)
 import hashlib
 import hmac
 import json
+import os
 import time
 from datetime import datetime
 
 import requests
 
-HNAP_URI = "http://192.168.100.1/HNAP1/"
+MODEM_HOSTNAME = "192.168.100.1"
+MODEM_USERNAME = os.getenv("MODEM_USERNAME", "admin")
+MODEM_PASSWORD = os.getenv("MODEM_PASSWORD", "motorola")
+
+HNAP_URI = f"https://{MODEM_HOSTNAME}/HNAP1/"
 SOAP_NAMESPACE = "http://purenetworks.com/HNAP1/"
 
 KNOWN_ACTIONS = [
@@ -26,6 +31,7 @@ KNOWN_ACTIONS = [
 ]
 
 session = requests.Session()
+session.verify = False
 
 
 def millis():
@@ -39,9 +45,9 @@ def md5sum(key, data):
     """
     Return the MD5 hash of the given data, using the given key.
     """
-    h = hmac.new(key.encode("utf-8"), digestmod=hashlib.md5)
-    h.update(data.encode("utf-8"))
-    return h.hexdigest()
+    hash = hmac.new(key.encode("utf-8"), digestmod=hashlib.md5)
+    hash.update(data.encode("utf-8"))
+    return hash.hexdigest()
 
 
 def hnap_auth(key, data):
@@ -125,7 +131,7 @@ def main():
     """
     Log in to the modem and pull all the known statistics.
     """
-    login("admin", "motorola")
+    login(MODEM_USERNAME, MODEM_PASSWORD)
 
     results = do_actions(*KNOWN_ACTIONS)
 
