@@ -170,7 +170,17 @@ def login(username, password):
     return response
 
 
-def main():
+def logs():
+    """
+    Log in to the modem and pull all the known statistics.
+    """
+    login(MODEM_USERNAME, MODEM_PASSWORD)
+
+    for log in get_logs():
+        print(log)
+
+
+def dump():
     """
     Log in to the modem and pull all the known statistics.
     """
@@ -182,4 +192,18 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    from argparse import ArgumentParser
+
+    parser = ArgumentParser()
+
+    subparsers = parser.add_subparsers()
+
+    subparser = subparsers.add_parser("dump")
+    subparser.set_defaults(fn=dump)
+
+    subparser = subparsers.add_parser("logs")
+    subparser.set_defaults(fn=logs)
+
+    args = parser.parse_args()
+
+    args.fn()
