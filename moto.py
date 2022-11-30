@@ -5,26 +5,32 @@ Used to manage and pull stats from a Motorola MB8600 modem (and possibly others)
 import hashlib
 import hmac
 import json
+import logging
 import os
 import time
 from dataclasses import dataclass
 from datetime import datetime
+from decimal import Decimal
 from typing import Generator
 
 import requests
+import urllib3
 from dateutil.parser import parse as parse_datetime
+from rich.console import Console
+from rich.logging import RichHandler
+from rich.table import Table
 
+FORMAT = "%(message)s"
+logging.basicConfig(
+    level="NOTSET",
+    format=FORMAT,
+    datefmt="[%X]",
+    handlers=[RichHandler(rich_tracebacks=True)],
+)
 
-@dataclass
-class Log:
-    """
-    A parsed log entry from the modem.
-    """
+logger = logging.getLogger("rich")
 
-    timestamp: datetime
-    level: str
-    message: str
-
+urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
 
 MODEM_HOSTNAME = "192.168.100.1"
 MODEM_USERNAME = os.getenv("MODEM_USERNAME", "admin")
@@ -44,6 +50,59 @@ KNOWN_ACTIONS = [
     "GetMotoStatusStartupSequence",
     "GetMotoStatusUpstreamChannelInfo",
 ]
+
+
+@dataclass
+class Log:
+    """
+    A parsed log entry from the modem.
+    """
+
+    timestamp: datetime
+    level: str
+    message: str
+
+    def __lt__(self, other):
+        return self.timestamp < other.timestamp
+
+
+@dataclass
+class DownstreamChannel:
+    """
+    A parsed downstream channel from the modem.
+    """
+
+    channel: int
+    lock_status: str
+    modulation: str
+    channel_id: int
+    frequency: Decimal
+    power: Decimal
+    snr: Decimal
+    corrected: int
+    uncorrected: int
+
+    def __lt__(self, other):
+        return self.channel < other.channel
+
+
+@dataclass
+class UpstreamChannel:
+    """
+    A parsed upstream channel from the modem.
+    """
+
+    channel: int
+    lock_status: str
+    channel_type: str
+    channel_id: int
+    symbol_rate: Decimal
+    frequency: Decimal
+    power: Decimal
+
+    def __lt__(self, other):
+        return self.channel < other.channel
+
 
 session = requests.Session()
 session.verify = False
@@ -170,17 +229,175 @@ def login(username, password):
     return response
 
 
-def logs():
+def get_downstream_channels() -> Generator[DownstreamChannel, None, None]:
+    """
+    Get the downstream levels from the modem.
+    """
+    results = do_action("GetMotoStatusDownstreamChannelInfo", {})
+
+    return parse_downstream_channels(results["MotoConnDownstreamChannel"])
+
+
+def parse_downstream_channels(channels_str) -> Generator[DownstreamChannel, None, None]:
+    """
+    Parse the downstream channels string into a generator of downstream channel objects.
+    """
+    for line in channels_str.split("|+|"):
+        yield parse_downstream_channel(line)
+
+
+def parse_downstream_channel(channel_str) -> DownstreamChannel:
+    """
+    Parse an individual downstream channel string into a downstream channel object.
+    """
+    channel, channel_str = channel_str.split("^", 1)
+    channel = int(channel)
+    lock_status, channel_str = channel_str.split("^", 1)
+    modulation, channel_str = channel_str.split("^", 1)
+    channel_id, channel_str = channel_str.split("^", 1)
+    channel_id = int(channel_id)
+    frequency, channel_str = channel_str.split("^", 1)
+    frequency = Decimal(frequency)
+    power, channel_str = channel_str.split("^", 1)
+    power = Decimal(power)
+    snr, channel_str = channel_str.split("^", 1)
+    snr = Decimal(snr)
+    corrected, channel_str = channel_str.split("^", 1)
+    corrected = int(corrected)
+    uncorrected, channel_str = channel_str.split("^", 1)
+    uncorrected = int(uncorrected.rstrip("^"))
+
+    return DownstreamChannel(
+        channel,
+        lock_status,
+        modulation,
+        channel_id,
+        frequency,
+        power,
+        snr,
+        corrected,
+        uncorrected,
+    )
+
+
+def get_upstream_channels():
+    """
+    Get the upstream levels from the modem.
+    """
+    results = do_action("GetMotoStatusUpstreamChannelInfo", {})
+
+    return parse_upstream_channels(results["MotoConnUpstreamChannel"])
+
+
+def parse_upstream_channels(channels_str) -> Generator[UpstreamChannel, None, None]:
+    """
+    Parse the upstream channels string into a generator of upstream channel objects.
+    """
+    for line in channels_str.split("|+|"):
+        yield parse_upstream_channel(line)
+
+
+def parse_upstream_channel(channel_str) -> UpstreamChannel:
+    """
+    Parse an individual upstream channel string into a upstream channel object.
+    """
+    channel, channel_str = channel_str.split("^", 1)
+    channel = int(channel)
+    lock_status, channel_str = channel_str.split("^", 1)
+    channel_type, channel_str = channel_str.split("^", 1)
+    channel_id, channel_str = channel_str.split("^", 1)
+    channel_id = int(channel_id)
+    symbol_rate, channel_str = channel_str.split("^", 1)
+    symbol_rate = Decimal(symbol_rate)
+    frequency, channel_str = channel_str.split("^", 1)
+    frequency = Decimal(frequency)
+    power, channel_str = channel_str.split("^", 1)
+    power = Decimal(power.rstrip("^"))
+
+    return UpstreamChannel(
+        channel,
+        lock_status,
+        channel_type,
+        channel_id,
+        symbol_rate,
+        frequency,
+        power,
+    )
+
+
+def logs_command():
     """
     Log in to the modem and pull all the known statistics.
     """
+    console = Console()
+    table = Table("Timestamp", "Level", "Message")
     login(MODEM_USERNAME, MODEM_PASSWORD)
 
-    for log in get_logs():
-        print(log)
+    for log in sorted(get_logs()):
+        table.add_row(log.timestamp.isoformat(), log.level, log.message)
+
+    console.print(table)
 
 
-def dump():
+def levels_command():
+    """
+    Log into the modem and pull current downstream and upstream power levels.
+    """
+    console = Console()
+    login(MODEM_USERNAME, MODEM_PASSWORD)
+
+    table = Table(
+        "Channel",
+        "Lock Status",
+        "Modulation",
+        "Channel ID",
+        "Frequency",
+        "Power",
+        "SNR",
+        "Corrected",
+        "Uncorrected",
+    )
+
+    for channel in sorted(get_downstream_channels()):
+        table.add_row(
+            str(channel.channel),
+            channel.lock_status,
+            channel.modulation,
+            str(channel.channel_id),
+            str(channel.frequency),
+            str(channel.power),
+            str(channel.snr),
+            str(channel.corrected),
+            str(channel.uncorrected),
+        )
+
+    console.print(table)
+
+    table = Table(
+        "Channel",
+        "Lock Status",
+        "Channel Type",
+        "Channel ID",
+        "Symbol Rate",
+        "Frequency",
+        "Power",
+    )
+
+    for level in sorted(get_upstream_channels()):
+        table.add_row(
+            str(level.channel),
+            level.lock_status,
+            level.channel_type,
+            str(level.channel_id),
+            str(level.symbol_rate),
+            str(level.frequency),
+            str(level.power),
+        )
+
+    console.print(table)
+
+
+def dump_command():
     """
     Log in to the modem and pull all the known statistics.
     """
@@ -199,10 +416,13 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers()
 
     subparser = subparsers.add_parser("dump")
-    subparser.set_defaults(fn=dump)
+    subparser.set_defaults(fn=dump_command)
 
     subparser = subparsers.add_parser("logs")
-    subparser.set_defaults(fn=logs)
+    subparser.set_defaults(fn=logs_command)
+
+    subparser = subparsers.add_parser("levels")
+    subparser.set_defaults(fn=levels_command)
 
     args = parser.parse_args()
 
