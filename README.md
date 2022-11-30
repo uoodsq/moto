@@ -4,8 +4,6 @@ my internet connection flaked out.  comcast support is less helpful if you own y
 
 if you have a motorola mb8600 and [jq](https://stedolan.github.io/jq/) and a crappy upstream connection to diagnose, boy howdy is this repo for you!
 
-[i have a problem](https://twitter.com/uoodsq/status/1172004368553598977)
-
 # Setup
 
 ya need python.  probably in a virtualenv.  install the requirements:
