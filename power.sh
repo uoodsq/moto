@@ -1,2 +1,0 @@
-#!/usr/bin/env bash
-cat ~/log/modem.log | jq -c '{ts: .ts, downstream: .data.GetMotoStatusDownstreamChannelInfoResponse.MotoConnDownstreamChannel, upstream: .data.GetMotoStatusUpstreamChannelInfoResponse.MotoConnUpstreamChannel}' | ./power.py $@
