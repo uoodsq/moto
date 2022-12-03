@@ -1,14 +1,19 @@
 """
 Command line interface.
 """
+import logging
+from time import sleep
+
 from rich.progress import Progress
 from rich.table import Table
+from schedule import every, run_pending
 from typer import Typer
 
 from .influx_client import InfluxClient
 from .moto_client import MotoClient
 
 app = Typer()
+log = logging.getLogger("rich")
 
 
 def _login(moto, progress: Progress):
@@ -27,8 +32,8 @@ def _get_logs(moto, progress):
 
 def _ingest_logs(logs, influx, progress):
     task = progress.add_task("Ingesting logs...", total=len(logs))
-    for log in logs:
-        influx.ingest_log(log)
+    for l in logs:  # pylint: disable=invalid-name
+        influx.ingest(l)
         progress.update(task, advance=1)
 
 
@@ -43,7 +48,7 @@ def _get_downstream_channels(moto, progress):
 def _ingest_downstream_channels(channels, influx, progress):
     task = progress.add_task("Ingesting downstream channels...", total=len(channels))
     for channel in channels:
-        influx.ingest_downstream_channel(channel)
+        influx.ingest(channel)
         progress.update(task, advance=1)
 
 
@@ -58,7 +63,7 @@ def _get_upstream_channels(moto, progress):
 def _ingest_upstream_channels(channels, influx, progress):
     task = progress.add_task("Ingesting upstream channels...", total=len(channels))
     for channel in channels:
-        influx.ingest_upstream_channel(channel)
+        influx.ingest(channel)
         progress.update(task, advance=1)
 
 
@@ -120,6 +125,9 @@ def _print_upstream_channels(channels, progress):
 
 @app.command()
 def read():
+    """
+    Read logs and levels from the modem and ingest them into InfluxDB.
+    """
     influx = InfluxClient()
     moto = MotoClient()
 
@@ -138,6 +146,9 @@ def read():
 
 @app.command()
 def dump():
+    """
+    Read levels from the modem and print them to the console.
+    """
     moto = MotoClient()
 
     with Progress() as progress:
@@ -148,3 +159,48 @@ def dump():
 
         channels = _get_upstream_channels(moto, progress)
         _print_upstream_channels(channels, progress)
+
+
+def _ingest():
+    influx = InfluxClient()
+    moto = MotoClient()
+
+    try:
+        log.info("logging in")
+
+        moto.login()
+    except:  # pylint: disable=bare-except
+        log.exception("failed to log in")
+
+    try:
+        log.info("getting logs")
+        for l in moto.get_logs():  # pylint: disable=invalid-name
+            influx.ingest(l)
+    except:  # pylint: disable=bare-except
+        log.exception("failed to get logs")
+
+    try:
+        log.info("getting downstream channels")
+        for channel in moto.get_downstream_channels():
+            influx.ingest(channel)
+    except:  # pylint: disable=bare-except
+        log.exception("failed to get downstream channels")
+
+    try:
+        log.info("getting upstream channels")
+        for channel in moto.get_upstream_channels():
+            influx.ingest(channel)
+    except:  # pylint: disable=bare-except
+        log.exception("failed to get upstream channels")
+
+
+@app.command()
+def run():
+    """
+    Run forever, reading periodically and ingesting to InfluxDB.
+    """
+    every().minute.do(_ingest)
+
+    while True:
+        run_pending()
+        sleep(1)
