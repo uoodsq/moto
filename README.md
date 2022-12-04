@@ -1,18 +1,37 @@
-# what is this?
+# What is this?
 
-my internet connection flaked out.  comcast support is less helpful if you own your own modem.  the modem's interface sucks and doesn't retain logs, so i wrote all this to pull logs down from the modem's crappy soap interface and slice through the logs and connection info to see what's really happening.
+My internet connection is very flaky.  Comcast support is less helpful if you own your own modem.  The modem's interface sucks and doesn't retain logs, so I wrote all this to pull logs down from the modem's crappy soap interface and slice through the logs and connection info to see what's really happening.
 
-if you have a motorola mb8600 and [jq](https://stedolan.github.io/jq/) and a crappy upstream connection to diagnose, boy howdy is this repo for you!
+[![CI](https://github.com/uoodsq/moto/actions/workflows/ci.yml/badge.svg)](https://github.com/uoodsq/moto/actions/workflows/ci.yml)
 
 # Setup
 
-ya need python.  probably in a virtualenv.  install the requirements:
+Set up a Python virtualenv and install the requirements.
 
 ```shell
 python -m venv venv
 source venv/bin/activate  # or whatever
 pip install -r requirements.txt
 ```
+
+If you want to persist reads in InfluxDB, have that running somewhere.
+
+# Usage
+
+Activate the virtualenv and run `python -m moto --help` for usage.
+
+By default, will communicate with your modem at `192.168.100.1` with the default login creds of `admin:motorola`.  If you've change the password, or your modem is available elsewhere, set these environment variables:
+
+- `MOTO_HOSTNAME`
+- `MOTO_USERNAME`
+- `MOTO_PASSWORD`
+
+If you're using InfluxDB (v2), you need to set these variables as well:
+
+- `INFLUXDB_URL` including protocol and port (e.g. `http://influx:8086`)
+- `INFLUXDB_TOKEN` should be scoped with read/write access to the desired bucket
+- `INFLUXDB_ORG`
+- `INFLUXDB_BUCKET`
 
 # Notes
 
