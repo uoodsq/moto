@@ -49,10 +49,8 @@ class ModemLog:
         Parse a single log line into a ModemLog object.
         """
         timestamp_str, line = line.split("\n", 1)
-        timestamp = parse_datetime(
-            timestamp_str.replace("^", " "),
-            tzinfo=gettz(os.getenv("TZ", "UTC")),
-        )
+        timestamp = parse_datetime(timestamp_str.replace("^", " "))
+        timestamp.replace(tzinfo=gettz(os.getenv("TZ", "UTC")))
 
         level, line = line.lstrip("^").split("^", 1)
 
