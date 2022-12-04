@@ -2,7 +2,7 @@
 Contains classes related to the representation of downstream channels.
 """
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Generator, Self
 
@@ -32,7 +32,7 @@ class DownstreamChannel:  # pylint: disable=too-many-instance-attributes
         """
         Convert this object to an InfluxDB Point.
         """
-        timestamp = datetime.now()
+        timestamp = datetime.now(timezone.utc)
 
         return (
             Point("downstream")

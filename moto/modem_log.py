@@ -1,11 +1,13 @@
 """
 Contains classes related to the representation of logs stored on the modem.
 """
+import os
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Generator, Self
 
 from dateutil.parser import parse as parse_datetime
+from dateutil.tz import gettz
 from influxdb_client import Point
 
 
@@ -47,7 +49,10 @@ class ModemLog:
         Parse a single log line into a ModemLog object.
         """
         timestamp_str, line = line.split("\n", 1)
-        timestamp = parse_datetime(timestamp_str.replace("^", " "))
+        timestamp = parse_datetime(
+            timestamp_str.replace("^", " "),
+            tzinfo=gettz(os.getenv("TZ", "UTC")),
+        )
 
         level, line = line.lstrip("^").split("^", 1)
 
