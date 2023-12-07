@@ -52,8 +52,10 @@ class ModemLog:
         Parse a single log line into a ModemLog object.
         """
         if "Time Not Established" in line:
+            return None        
+        if "\n" not in line:
             return None
-
+        
         timestamp_str, line = line.split("\n", 1)
         timestamp = parse_datetime(timestamp_str.replace("^", " "))
         timestamp.replace(tzinfo=gettz(os.getenv("TZ", "UTC")))
