@@ -41,13 +41,21 @@ class ModemLog:
         Parse a raw log string into a generator of ModemLog objects.
         """
         for line in response.split("}-{"):
-            yield cls.from_line(line)
+            modemlog = cls.from_line(line)
+            if modemlog is not None:
+                yield modemlog
+
 
     @classmethod
     def from_line(cls, line: str) -> Self:
         """
         Parse a single log line into a ModemLog object.
         """
+        if "Time Not Established" in line:
+            return None        
+        if "\n" not in line:
+            return None
+        
         timestamp_str, line = line.split("\n", 1)
         timestamp = parse_datetime(timestamp_str.replace("^", " "))
         timestamp.replace(tzinfo=gettz(os.getenv("TZ", "UTC")))
