@@ -6,19 +6,19 @@ My internet connection is very flaky.  Comcast support is less helpful if you ow
 
 # Setup
 
-Set up a Python virtualenv and install the requirements.
+Set up a Python virtualenv and install the package.
 
 ```shell
 python -m venv venv
 source venv/bin/activate  # or whatever
-pip install -r requirements.txt
+pip install .
 ```
 
 If you want to persist reads in InfluxDB, have that running somewhere.
 
 # Usage
 
-Activate the virtualenv and run `python -m moto --help` for usage.
+Activate the virtualenv and run `moto --help` for usage.
 
 By default, will communicate with your modem at `192.168.100.1` with the default login creds of `admin:motorola`.  If you've change the password, or your modem is available elsewhere, set these environment variables:
 
